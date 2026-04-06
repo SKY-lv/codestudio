@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeStudio - 在线代码编辑器</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<style>
+body{margin:0;padding:0;background:#1e1e1e;color:#d4d4d4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;}
+#container{display:flex;height:100vh;flex-direction:column;}
+#toolbar{height:48px;background:#2d2d30;border-bottom:1px solid #3e3e42;display:flex;align-items:center;padding:0 16px;gap:12px;}
+#editor-container{flex:1;display:flex;}
+#sidebar{width:240px;background:#252526;border-right:1px solid #3e3e42;display:flex;flex-direction:column;}
+#editor{flex:1;}
+#panel{height:200px;background:#1e1e1e;border-top:1px solid #3e3e42;display:none;}
+#panel.visible{display:flex;flex-direction:column;}
+.btn{padding:6px 14px;background:#0e639c;border:none;border-radius:4px;color:#fff;cursor:pointer;font-size:13px;transition:background 0.2s;}
+.btn:hover{background:#1177bb;}
+.btn-secondary{background:#3c3c3c;}
+.btn-secondary:hover{background:#4c4c4c;}
+.btn-success{background:#238636;}
+.btn-success:hover{background:#2ea043;}
+.btn-danger{background:#da3633;}
+.btn-danger:hover{background:#f85149;}
+select{background:#3c3c3c;border:1px solid #3e3e42;color:#ccc;padding:4px 8px;border-radius:4px;font-size:13px;}
+.file-item{padding:8px 16px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;transition:background 0.2s;}
+.file-item:hover{background:#2a2d2e;}
+.file-item.active{background:#37373d;}
+.file-icon{font-size:14px;}
+.file-name{flex:1;}
+.tab-bar{display:flex;background:#2d2d30;border-bottom:1px solid #3e3e42;overflow-x:auto;}
+.tab{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#2d2d30;border-right:1px solid #3e3e42;cursor:pointer;font-size:13px;white-space:nowrap;}
+.tab:hover{background:#3c3c3c;}
+.tab.active{background:#1e1e1e;}
+.tab-close{padding:2px 6px;border-radius:3px;}
+.tab-close:hover{background:#da3633;color:#fff;}
+.panel-header{display:flex;align-items:center;padding:8px 16px;background:#2d2d30;border-bottom:1px solid #3e3e42;gap:16px;}
+.panel-tab{padding:4px 12px;cursor:pointer;font-size:13px;color:#969696;border-radius:4px;}
+.panel-tab:hover{color:#ccc;}
+.panel-tab.active{color:#fff;background:#3c3c3c;}
+.panel-content{flex:1;padding:12px 16px;overflow:auto;font-family:'Consolas','Monaco',monospace;font-size:13px;line-height:1.5;}
+.output-line{margin:2px 0;}
+.output-line.error{color:#f48771;}
+.output-line.success{color:#7ee787;}
+.output-line.info{color:#79c0ff;}
+.sidebar-header{padding:12px 16px;font-size:11px;text-transform:uppercase;color:#969696;letter-spacing:0.5px;}
+.sidebar-actions{padding:8px 16px;display:flex;gap:8px;}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:1000;}
+.modal.visible{display:flex;}
+.modal-content{background:#2d2d30;border:1px solid #3e3e42;border-radius:8px;padding:24px;min-width:400px;max-width:600px;}
+.modal-title{font-size:18px;margin-bottom:16px;}
+.modal-body{margin-bottom:20px;}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;}
+input[type="text"]{width:100%;background:#3c3c3c;border:1px solid #3e3e42;color:#ccc;padding:8px 12px;border-radius:4px;font-size:14px;}
+input[type="text"]:focus{outline:none;border-color:#0e639c;}
+.shortcut{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #3e3e42;font-size:13px;}
+.shortcut:last-child{border:none;}
+.shortcut-key{color:#79c0ff;font-family:monospace;}
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="toolbar">
+    <span style="font-weight:600;font-size:15px;color:#fff;">CodeStudio</span>
+    <div style="flex:1;"></div>
+    <select id="language-select" onchange="changeLanguage()">
+      <option value="javascript">JavaScript</option>
+      <option value="typescript">TypeScript</option>
+      <option value="python">Python</option>
+      <option value="html">HTML</option>
+      <option value="css">CSS</option>
+      <option value="json">JSON</option>
+      <option value="markdown">Markdown</option>
+      <option value="sql">SQL</option>
+      <option value="java">Java</option>
+      <option value="cpp">C++</option>
+      <option value="rust">Rust</option>
+      <option value="go">Go</option>
+    </select>
+    <select id="theme-select" onchange="changeTheme()">
+      <option value="vs-dark">Dark</option>
+      <option value="vs">Light</option>
+      <option value="hc-black">High Contrast</option>
+    </select>
+    <button class="btn btn-success" onclick="runCode()">▶ 运行</button>
+    <button class="btn" onclick="formatCode()">✓ 格式化</button>
+    <button class="btn btn-secondary" onclick="downloadCode()">💾 保存</button>
+    <button class="btn btn-secondary" onclick="showShortcuts()">⌨️ 快捷键</button>
+  </div>
+  
+  <div id="editor-container">
+    <div id="sidebar">
+      <div class="sidebar-header">Explorer</div>
+      <div class="sidebar-actions">
+        <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;" onclick="newFile()">+ 新建</button>
+        <button class="btn btn-danger" style="padding:4px 12px;font-size:12px;" onclick="deleteFile()">🗑</button>
+      </div>
+      <div id="file-list"></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;">
+      <div class="tab-bar" id="tab-bar"></div>
+      <div id="editor"></div>
+    </div>
+  </div>
+  
+  <div id="panel">
+    <div class="panel-header">
+      <span class="panel-tab active" onclick="switchPanel('output')">输出</span>
+      <span class="panel-tab" onclick="switchPanel('problems')">问题</span>
+      <span class="panel-tab" onclick="switchPanel('terminal')">终端</span>
+      <div style="flex:1;"></div>
+      <button class="btn btn-secondary" style="padding:4px 12px;font-size:12px;" onclick="togglePanel()">✕</button>
+    </div>
+    <div class="panel-content" id="panel-content"></div>
+  </div>
+</div>
+
+<div class="modal" id="new-file-modal">
+  <div class="modal-content">
+    <div class="modal-title">新建文件</div>
+    <div class="modal-body">
+      <input type="text" id="new-filename" placeholder="文件名 (如: script.js)" autofocus>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="confirmNewFile()">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="shortcuts-modal">
+  <div class="modal-content" style="min-width:500px;">
+    <div class="modal-title">⌨️ 快捷键</div>
+    <div class="modal-body">
+      <div class="shortcut"><span>运行代码</span><span class="shortcut-key">Ctrl+Enter</span></div>
+      <div class="shortcut"><span>保存文件</span><span class="shortcut-key">Ctrl+S</span></div>
+      <div class="shortcut"><span>格式化</span><span class="shortcut-key">Shift+Alt+F</span></div>
+      <div class="shortcut"><span>查找</span><span class="shortcut-key">Ctrl+F</span></div>
+      <div class="shortcut"><span>替换</span><span class="shortcut-key">Ctrl+H</span></div>
+      <div class="shortcut"><span>命令面板</span><span class="shortcut-key">Ctrl+Shift+P</span></div>
+      <div class="shortcut"><span>转到行</span><span class="shortcut-key">Ctrl+G</span></div>
+      <div class="shortcut"><span>切换注释</span><span class="shortcut-key">Ctrl+/</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let editor;
+let files = {};
+let currentFile = null;
+let monaco;
+
+// Default files
+files['main.js'] = { content: '// Welcome to CodeStudio!\n// Write your code here and press Ctrl+Enter to run\n\nfunction greet(name) {\n  return `Hello, ${name}!`;\n}\n\nconsole.log(greet("World"));\n', language: 'javascript' };
+
+require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+
+require(['vs/editor/editor.main'], function() {
+  monaco = window.monaco;
+  
+  editor = monaco.editor.create(document.getElementById('editor'), {
+    value: files['main.js'].content,
+    language: 'javascript',
+    theme: 'vs-dark',
+    fontSize: 14,
+    minimap: { enabled: true },
+    automaticLayout: true,
+    scrollBeyondLastLine: false,
+    roundedSelection: false,
+    padding: { top: 16 },
+    folding: true,
+    renderLineHighlight: 'all',
+    selectOnLineNumbers: true,
+    matchBrackets: 'always',
+    tabSize: 2,
+    insertSpaces: true,
+  });
+  
+  currentFile = 'main.js';
+  updateFileList();
+  updateTabs();
+  
+  // Keyboard shortcuts
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runCode);
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+    saveCurrentFile();
+    return false;
+  });
+});
+
+function updateFileList() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = Object.keys(files).map(name => 
+    `<div class="file-item ${name === currentFile ? 'active' : ''}" onclick="openFile('${name}')">
+      <span class="file-icon">${getFileIcon(name)}</span>
+      <span class="file-name">${name}</span>
+    </div>`
+  ).join('');
+}
+
+function getFileIcon(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const icons = {
+    js: '📜', ts: '📘', py: '🐍', html: '🌐', css: '🎨',
+    json: '📋', md: '📝', sql: '🗃️', java: '☕', cpp: '⚡',
+    rs: '🦀', go: '🐹', txt: '📄'
+  };
+  return icons[ext] || '📄';
+}
+
+function updateTabs() {
+  const bar = document.getElementById('tab-bar');
+  bar.innerHTML = Object.keys(files).map(name =>
+    `<div class="tab ${name === currentFile ? 'active' : ''}" onclick="openFile('${name}')">
+      <span>${getFileIcon(name)}</span>
+      <span>${name}</span>
+      <span class="tab-close" onclick="event.stopPropagation(); closeFile('${name}')">×</span>
+    </div>`
+  ).join('');
+}
+
+function openFile(name) {
+  if (currentFile && files[currentFile]) {
+    files[currentFile].content = editor.getValue();
+  }
+  currentFile = name;
+  editor.setValue(files[name].content);
+  monaco.editor.setModelLanguage(editor.getModel(), files[name].language);
+  document.getElementById('language-select').value = files[name].language;
+  updateFileList();
+  updateTabs();
+}
+
+function saveCurrentFile() {
+  if (currentFile) {
+    files[currentFile].content = editor.getValue();
+    showOutput('✓ 文件已保存: ' + currentFile, 'success');
+  }
+}
+
+function newFile() {
+  document.getElementById('new-file-modal').classList.add('visible');
+  document.getElementById('new-filename').value = '';
+  document.getElementById('new-filename').focus();
+}
+
+function confirmNewFile() {
+  const name = document.getElementById('new-filename').value.trim();
+  if (!name) return;
+  if (files[name]) {
+    alert('文件已存在!');
+    return;
+  }
+  const ext = name.split('.').pop().toLowerCase();
+  const langMap = {
+    js: 'javascript', ts: 'typescript', py: 'python', html: 'html',
+    css: 'css', json: 'json', md: 'markdown', sql: 'sql',
+    java: 'java', cpp: 'cpp', rs: 'rust', go: 'go'
+  };
+  files[name] = { content: '', language: langMap[ext] || 'plaintext' };
+  openFile(name);
+  closeModal();
+}
+
+function closeFile(name) {
+  if (Object.keys(files).length <= 1) {
+    alert('至少保留一个文件');
+    return;
+  }
+  delete files[name];
+  if (currentFile === name) {
+    currentFile = Object.keys(files)[0];
+    editor.setValue(files[currentFile].content);
+  }
+  updateFileList();
+  updateTabs();
+}
+
+function deleteFile() {
+  if (currentFile && confirm(`删除 ${currentFile}?`)) {
+    closeFile(currentFile);
+  }
+}
+
+function closeModal() {
+  document.querySelectorAll('.modal').forEach(m => m.classList.remove('visible'));
+}
+
+function showShortcuts() {
+  document.getElementById('shortcuts-modal').classList.add('visible');
+}
+
+function changeLanguage() {
+  const lang = document.getElementById('language-select').value;
+  monaco.editor.setModelLanguage(editor.getModel(), lang);
+  if (currentFile) {
+    files[currentFile].language = lang;
+  }
+}
+
+function changeTheme() {
+  const theme = document.getElementById('theme-select').value;
+  monaco.editor.setTheme(theme);
+}
+
+function formatCode() {
+  editor.getAction('editor.action.formatDocument').run();
+}
+
+function downloadCode() {
+  if (!currentFile) return;
+  const blob = new Blob([editor.getValue()], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = currentFile;
+  a.click();
+}
+
+function runCode() {
+  const code = editor.getValue();
+  const lang = files[currentFile]?.language || 'javascript';
+  
+  togglePanel(true);
+  document.getElementById('panel-content').innerHTML = '';
+  
+  if (lang === 'javascript') {
+    runJavaScript(code);
+  } else if (lang === 'html') {
+    showOutput('HTML预览:', 'info');
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width:100%;height:150px;border:1px solid #3e3e42;background:#fff;';
+    document.getElementById('panel-content').appendChild(iframe);
+    iframe.contentDocument.write(code);
+    iframe.contentDocument.close();
+  } else {
+    showOutput(`暂不支持直接运行 ${lang} 代码`, 'error');
+    showOutput('提示: JavaScript 和 HTML 可以直接运行', 'info');
+  }
+}
+
+function runJavaScript(code) {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const outputs = [];
+  
+  console.log = (...args) => {
+    outputs.push({ type: 'log', content: args.join(' ') });
+    originalLog.apply(console, args);
+  };
+  
+  console.error = (...args) => {
+    outputs.push({ type: 'error', content: args.join(' ') });
+    originalError.apply(console, args);
+  };
+  
+  try {
+    const result = eval(code);
+    if (result !== undefined) {
+      outputs.push({ type: 'success', content: '=> ' + String(result) });
+    }
+  } catch (err) {
+    outputs.push({ type: 'error', content: err.toString() });
+  }
+  
+  console.log = originalLog;
+  console.error = originalError;
+  
+  const panel = document.getElementById('panel-content');
+  if (outputs.length === 0) {
+    panel.innerHTML = '<div class="output-line info">代码执行完成 (无输出)</div>';
+  } else {
+    panel.innerHTML = outputs.map(o => 
+      `<div class="output-line ${o.type}">${escapeHtml(o.content)}</div>`
+    ).join('');
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showOutput(text, type) {
+  const panel = document.getElementById('panel-content');
+  panel.innerHTML += `<div class="output-line ${type}">${escapeHtml(text)}</div>`;
+}
+
+function togglePanel(show) {
+  const panel = document.getElementById('panel');
+  if (show) panel.classList.add('visible');
+  else panel.classList.toggle('visible');
+}
+
+function switchPanel(tab) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  const content = document.getElementById('panel-content');
+  if (tab === 'output') {
+    // Keep current output
+  } else if (tab === 'problems') {
+    content.innerHTML = '<div class="output-line info">暂无问题</div>';
+  } else if (tab === 'terminal') {
+    content.innerHTML = '<div class="output-line info">终端功能开发中...</div>';
+  }
+}
+
+// Close modal on outside click
+window.onclick = function(e) {
+  if (e.target.classList.contains('modal')) {
+    e.target.classList.remove('visible');
+  }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeModal();
+  }
+});
+</script>
+</body>
+</html>
